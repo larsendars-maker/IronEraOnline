@@ -1,25 +1,46 @@
-# Iron Era Online v1.8 — Modular Project
+# Iron Era Online v1.8.1 — Render Fixed
 
-Теперь проект разделён на понятные зоны: серверная логика, данные, общий протокол и клиент.
+Исправления этой версии:
+- `server/legacy/engine.js` теперь правильно раздаёт `public/` из корня проекта;
+- исправлен `ENOENT ... server/legacy/public/index.html`;
+- добавлен `dbOnline` и безопасный fallback в memory mode при проблемах PostgreSQL;
+- сохранены существующие комнаты/игра;
+- Render entrypoint остаётся `server.js` → `server/index.js`;
+- Node ограничен `>=20 <23` для более предсказуемого запуска.
 
-## Главный принцип
-- `server/` — логика сервера и игровой движок.
-- `data/` — изменяемый игровой контент.
-- `shared/` — общий контракт сервера и клиента.
-- `public/` — интерфейс и клиент.
+Render:
+- Build: `npm install`
+- Start: `npm start`
 
-## Render
-Build: `npm install`
-Start: `npm start`
+После деплоя `/health` должен показывать:
+```json
+{"ok":true,"db":"memory"}
+```
+или
+```json
+{"ok":true,"db":"online"}
+```
 
-`server.js` в корне является совместимым entrypoint и импортирует `server/index.js`.
-
-## Что уже перенесено
-- страны в `data/countries`;
-- технологии в `data/technologies`;
-- юниты в `data/units`;
-- фокус generic в `data/focuses`;
-- сценарии в `data/scenarios`;
-- клиентский код разделён на `core/site/lobby/game`.
-
-Оставшийся production engine временно находится в `server/legacy/engine.js`: это намеренная миграционная прослойка, чтобы архитектурный рефакторинг не ломал текущую рабочую игру. Следующий шаг — выносить по одному модулю из legacy в `server/game/*`.
+Основная структура:
+```text
+IronEraOnline/
+├── package.json
+├── server.js
+├── render.yaml
+├── README.md
+├── server/
+│   ├── index.js
+│   ├── legacy/
+│   │   └── engine.js
+│   ├── config/
+│   ├── api/
+│   ├── websocket/
+│   ├── auth/
+│   ├── lobby/
+│   ├── persistence/
+│   ├── utils/
+│   └── game/
+├── shared/
+├── data/
+└── public/
+```

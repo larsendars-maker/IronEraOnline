@@ -13,11 +13,14 @@ const wss = new WebSocketServer({ server });
 const PORT = Number(process.env.PORT || 10000);
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(new URL('./public', import.meta.url).pathname));
+const PUBLIC_DIR = new URL('../../public', import.meta.url).pathname;
+app.use(express.static(PUBLIC_DIR));
 
 const pool = process.env.DATABASE_URL
   ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
   : null;
+
+let dbOnline = Boolean(pool);
 
 const sessions = new Map();
 const sockets = new Map();
@@ -392,18 +395,62 @@ function userFromReq(req){
 function publicUser(u){return u?{id:u.userId,username:u.username}:null;}
 function authKey(username){return String(username||'').trim().toLowerCase();}
 async function initDb(){
-  if(!dbOnline)return;
-  await pool.query(`CREATE TABLE IF NOT EXISTS ie_users(id uuid PRIMARY KEY, username varchar(40) UNIQUE NOT NULL, password_hash text NOT NULL, created_at timestamptz DEFAULT now());`);
-  await pool.query(`CREATE TABLE IF NOT EXISTS ie_rooms(id varchar(24) PRIMARY KEY, name varchar(80) NOT NULL, payload jsonb NOT NULL, updated_at timestamptz DEFAULT now());`);
+  if(!pool){ dbOnline=false; console.log('[IronEra] DATABASE_URL not set; using memory mode.'); return; }
+  try{
+    await pool.query('SELECT 1');
+    await pool.query(`CREATE TABLE IF NOT EXISTS ie_users(
+      id uuid PRIMARY KEY,
+      username varchar(40) UNIQUE NOT NULL,
+      password_hash text NOT NULL,
+      created_at timestamptz DEFAULT now()
+    );`);
+    await pool.query(`CREATE TABLE IF NOT EXISTS ie_rooms(
+      id varchar(24) PRIMARY KEY,
+      name varchar(80) NOT NULL,
+      payload jsonb NOT NULL,
+      updated_at timestamptz DEFAULT now()
+    );`);
+    dbOnline=true;
+    console.log('[IronEra] PostgreSQL online.');
+  }catch(e){
+    dbOnline=false;
+    console.error('[IronEra] PostgreSQL unavailable; using memory mode:', e.message);
+  }
 }
 async function saveRoom(room){
   if(!dbOnline)return;
-  await pool.query(`INSERT INTO ie_rooms(id,name,payload,updated_at) VALUES($1,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,payload=EXCLUDED.payload,updated_at=now()`,[room.id,room.name,JSON.stringify({host:room.host,maxPlayers:room.maxPlayers,status:room.status,world:room.world})]);
+  try{
+    await pool.query(
+      `INSERT INTO ie_rooms(id,name,payload,updated_at)
+       VALUES($1,$2,$3,now())
+       ON CONFLICT(id) DO UPDATE
+       SET name=EXCLUDED.name,payload=EXCLUDED.payload,updated_at=now()`,
+      [room.id,room.name,JSON.stringify({
+        host:room.host,maxPlayers:room.maxPlayers,status:room.status,world:room.world
+      })]
+    );
+  }catch(e){
+    dbOnline=false;
+    console.error('[IronEra] Save failed; switching to memory mode:', e.message);
+  }
 }
 async function loadRooms(){
   if(!dbOnline)return;
-  const r=await pool.query(`SELECT * FROM ie_rooms ORDER BY updated_at DESC LIMIT 30`);
-  for(const row of r.rows){const p=row.payload;rooms.set(row.id,{id:row.id,name:row.name,host:p.host,maxPlayers:p.maxPlayers,status:p.status||'waiting',world:p.world||makeWorld(),clients:new Map(),lastSave:Date.now()});}
+  try{
+    const r=await pool.query(`SELECT * FROM ie_rooms ORDER BY updated_at DESC LIMIT 30`);
+    for(const row of r.rows){
+      const p=row.payload||{};
+      rooms.set(row.id,{
+        id:row.id,name:row.name,host:p.host,maxPlayers:p.maxPlayers,
+        status:p.status||'waiting',world:p.world||makeWorld(),
+        clients:new Map(),lastSave:Date.now()
+      });
+    }
+    console.log(`[IronEra] Loaded ${r.rows.length} saved rooms.`);
+  }catch(e){
+    dbOnline=false;
+    console.error('[IronEra] Room load failed; using memory mode:', e.message);
+  }
 }
 async function auth(username,password){
   username=String(username||'').trim();
@@ -420,10 +467,10 @@ async function auth(username,password){
   const s={userId:q.rows[0].id,username:q.rows[0].username,token:crypto.randomBytes(24).toString('hex')};sessions.set(s.token,s);return s;
 }
 
-app.get('/',(_,res)=>res.sendFile(new URL('./public/index.html',import.meta.url).pathname));
-app.get('/lobby',(_,res)=>res.sendFile(new URL('./public/pages/lobby.html',import.meta.url).pathname));
-app.get('/game',(_,res)=>res.sendFile(new URL('./public/pages/game.html',import.meta.url).pathname));
-app.get('/profile',(_,res)=>res.sendFile(new URL('./public/pages/profile.html',import.meta.url).pathname));
+app.get('/',(_,res)=>res.sendFile(new URL('../../public/index.html',import.meta.url).pathname));
+app.get('/lobby',(_,res)=>res.sendFile(new URL('../../public/pages/lobby.html',import.meta.url).pathname));
+app.get('/game',(_,res)=>res.sendFile(new URL('../../public/pages/game.html',import.meta.url).pathname));
+app.get('/profile',(_,res)=>res.sendFile(new URL('../../public/pages/profile.html',import.meta.url).pathname));
 app.get('/api/me',(req,res)=>res.json({user:publicUser(userFromReq(req))}));
 app.post('/api/auth/register',async(req,res)=>{try{const s=await auth(req.body.username,req.body.password);res.json({ok:true,token:s.token,user:publicUser(s)});}catch(e){res.status(400).json({ok:false,error:e.message});}});
 app.post('/api/auth/login',async(req,res)=>{try{const s=await auth(req.body.username,req.body.password);res.json({ok:true,token:s.token,user:publicUser(s)});}catch(e){res.status(400).json({ok:false,error:e.message});}});
