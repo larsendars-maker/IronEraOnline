@@ -1,20 +1,39 @@
-const tokenKey="ironEraToken";
-function token(){return localStorage.getItem(tokenKey)}
-function api(path,opts={}){const headers={"Content-Type":"application/json",...(opts.headers||{})};if(token())headers.Authorization="Bearer "+token();return fetch(path,{...opts,headers})}
-async function loadMe(){
-  const r=await api("/api/me");const d=await r.json();
-  const box=document.getElementById("userBox");
-  if(!box)return;
-  if(d.user)box.innerHTML=`<a href="/profile">${esc(d.user.username)}</a> <button class="logout" id="logout">Выйти</button>`;
-  else box.innerHTML=`<button class="logout" id="loginSite">Войти</button>`;
-  document.getElementById("logout")?.addEventListener("click",async()=>{await api("/api/auth/logout",{method:"POST"});localStorage.removeItem(tokenKey);location.href="/";});
-  document.getElementById("loginSite")?.addEventListener("click",()=>openLogin());
+const TOKEN_KEY='ironEraToken';
+function getToken(){return localStorage.getItem(TOKEN_KEY)||'';}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+async function api(path,options={}){
+  const headers={'Content-Type':'application/json',...(options.headers||{})};
+  const t=getToken(); if(t)headers.Authorization=`Bearer ${t}`;
+  return fetch(path,{...options,headers});
 }
-function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
-function openLogin(){
-  const modal=document.createElement("div");modal.className="modal";modal.innerHTML=`<div class="modal-card"><h2>Войти в Iron Era</h2><input id="authUser" placeholder="Логин"><input id="authPass" type="password" placeholder="Пароль"><div style="display:flex;gap:6px;margin-top:8px"><button class="btn gold" id="authLogin">Войти</button><button class="btn" id="authReg">Регистрация</button></div><div id="authErr" style="color:#c87a70;margin-top:8px;font-size:11px"></div></div>`;document.body.appendChild(modal);
-  async function run(path){const r=await fetch(path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:authUser.value,password:authPass.value})});const d=await r.json();if(!d.ok){authErr.textContent=d.error;return}localStorage.setItem(tokenKey,d.token);location.reload()}
-  authLogin.onclick=()=>run("/api/auth/login");authReg.onclick=()=>run("/api/auth/register");
+function showAuth(){
+  const old=document.querySelector('.modal.auth-modal'); if(old)old.remove();
+  const el=document.createElement('div'); el.className='modal auth-modal';
+  el.innerHTML=`<div class="modal-card"><button class="close" id="authClose">×</button><h2>Войти в Iron Era</h2><p class="muted">Для игры нужен аккаунт.</p><input id="authUser" maxlength="20" placeholder="Логин"><input id="authPass" type="password" placeholder="Пароль"><div class="auth-actions"><button class="btn gold" id="authLogin">Войти</button><button class="btn" id="authRegister">Регистрация</button></div><div id="authError" class="error"></div></div>`;
+  document.body.appendChild(el);
+  authClose.onclick=()=>el.remove();
+  async function submit(url){
+    const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:authUser.value,password:authPass.value})});
+    const d=await r.json(); if(!d.ok){authError.textContent=d.error;return;}
+    localStorage.setItem(TOKEN_KEY,d.token); location.reload();
+  }
+  authLogin.onclick=()=>submit('/api/auth/login');
+  authRegister.onclick=()=>submit('/api/auth/register');
 }
-document.getElementById("loginBtn")?.addEventListener("click",openLogin);
-loadMe();
+async function refreshUserBox(){
+  const box=document.getElementById('userBox'); if(!box)return;
+  try{
+    const r=await api('/api/me'); const d=await r.json();
+    if(d.user){
+      box.innerHTML=`<a class="user-link" href="/profile">${esc(d.user.username)}</a><button class="logout" id="logoutBtn">Выйти</button>`;
+      document.getElementById('loginBtn')?.remove();
+      document.getElementById('logoutBtn')?.addEventListener('click',async()=>{
+        await api('/api/auth/logout',{method:'POST'});localStorage.removeItem(TOKEN_KEY);location.reload();
+      });
+    }else if(document.getElementById('loginBtn')){
+      document.getElementById('loginBtn').style.display='inline-flex';
+    }
+  }catch{}
+}
+document.getElementById('loginBtn')?.addEventListener('click',showAuth);
+refreshUserBox();
