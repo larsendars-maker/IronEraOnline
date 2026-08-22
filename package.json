@@ -1,6 +1,6 @@
 {
   "name": "iron-era-online",
-  "version": "0.7.0",
+  "version": "0.6.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -11,8 +11,6 @@
   },
   "dependencies": {
     "express": "^5.1.0",
-    "ws": "^8.18.3",
-    "pg": "^8.16.3",
-    "bcryptjs": "^3.0.2"
+    "ws": "^8.18.3"
   }
 }
