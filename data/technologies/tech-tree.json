@@ -1,0 +1,62 @@
+[
+  {
+    "id": "infantry_weapons",
+    "name": "Пехотное оружие",
+    "group": "Сухопутные",
+    "cost": 100
+  },
+  {
+    "id": "artillery",
+    "name": "Артиллерия",
+    "group": "Сухопутные",
+    "cost": 125
+  },
+  {
+    "id": "motorization",
+    "name": "Моторизация",
+    "group": "Сухопутные",
+    "cost": 150
+  },
+  {
+    "id": "medium_tanks",
+    "name": "Средние танки",
+    "group": "Броня",
+    "cost": 180
+  },
+  {
+    "id": "logistics",
+    "name": "Логистика",
+    "group": "Промышленность",
+    "cost": 140
+  },
+  {
+    "id": "industry",
+    "name": "Промышленность",
+    "group": "Промышленность",
+    "cost": 120
+  },
+  {
+    "id": "radar",
+    "name": "Радар",
+    "group": "Авиация",
+    "cost": 150
+  },
+  {
+    "id": "fighters",
+    "name": "Истребители",
+    "group": "Авиация",
+    "cost": 170
+  },
+  {
+    "id": "naval_doctrine",
+    "name": "Морская доктрина",
+    "group": "Флот",
+    "cost": 165
+  },
+  {
+    "id": "submarines",
+    "name": "Подводные лодки",
+    "group": "Флот",
+    "cost": 155
+  }
+]
