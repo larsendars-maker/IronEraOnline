@@ -1,9 +1,214 @@
 <!doctype html>
 <html lang="ru">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Iron Era Online</title><link rel="stylesheet" href="/css/site.css"></head>
-<body class="landing">
-<header class="sitebar"><a href="/" class="brand">IRON <span>ERA</span></a><nav><a href="/lobby">Лобби</a><a href="/profile">Профиль</a></nav><div id="userBox"></div></header>
-<section class="hero-site"><div class="hero-copy"><div class="eyebrow">IRON ERA • GLOBAL STRATEGY ONLINE</div><h1>Твоя история.<br><em>Твоя война.</em></h1><p>Создавай мировые кампании, играй с друзьями в real-time, веди дипломатию, развивай промышленность и ломай историю.</p><div class="hero-actions"><a class="btn gold" href="/lobby">Открыть лобби</a><button class="btn ghost" id="loginBtn">Войти</button></div></div><div class="hero-world"><div class="orbit o1"></div><div class="orbit o2"></div><div class="world-card"><b>WORLD CAMPAIGN</b><span>REAL-TIME</span><div class="mini-map"></div></div></div></section>
-<section class="feature-grid"><article><b>🌍 Живой мир</b><p>Общие комнаты, WebSocket и серверная симуляция.</p></article><article><b>🤝 Игра с друзьями</b><p>Создавай приватные кампании и собирай лобби.</p></article><article><b>🤖 ИИ</b><p>ИИ развивает страны, исследует технологии и воюет.</p></article><article><b>💾 Сохранения</b><p>PostgreSQL сохраняет кампании между перезапусками.</p></article></section>
-<script src="/js/site.js"></script></body></html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>IRON ERA — Grand Strategy Online</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="boot" class="boot-overlay"><div class="boot-card"><div class="boot-seal">IE</div><b>ПОДКЛЮЧЕНИЕ К МИРОВОМУ СЕРВЕРУ</b><span>WebSocket • синхронизация мира</span></div></div>
+<div id="login" class="overlay">
+
+  <!-- STEP 1: choose online / solo -->
+  <div class="login-card" id="stepMode">
+    <div class="seal">IRON ERA</div>
+    <div class="eyebrow">GRAND STRATEGY • REAL-TIME MULTIPLAYER</div>
+    <h1>Новая мировая кампания</h1>
+    <p>Играй один на один с ИИ или присоединяйся к другим игрокам в общем мире.</p>
+    <div class="mode-choice">
+      <button id="chooseOnline" class="bigbutton">🌐 ОНЛАЙН<br><small>играть с другими</small></button>
+      <button id="chooseSolo" class="bigbutton">🤖 СОЛО<br><small>против ИИ</small></button>
+    </div>
+    <div class="login-meta">WebSocket • серверная логика • комнаты</div>
+  </div>
+
+  <!-- STEP 2: room list / create -->
+  <div class="login-card" id="stepRooms" style="display:none">
+    <div class="eyebrow">ОНЛАЙН КАМПАНИИ</div>
+    <h1>Выбери комнату</h1>
+    <div id="roomList" class="room-list"><div class="room-empty">Загрузка списка комнат…</div></div>
+    <div class="section-title" style="margin-top:14px">СОЗДАТЬ КОМНАТУ</div>
+    <input id="roomName" maxlength="30" placeholder="Название комнаты">
+    <div class="room-settings">
+      <label>Игроков<select id="roomMax">
+        <option value="2">2</option><option value="4">4</option>
+        <option value="8" selected>8</option><option value="20">20</option>
+      </select></label>
+      <label>Скорость<select id="roomSpeed">
+        <option value="0.5">0.5×</option><option value="1" selected>1×</option>
+        <option value="2">2×</option><option value="4">4×</option>
+      </select></label>
+    </div>
+    <button id="createRoomBtn">СОЗДАТЬ КОМНАТУ</button>
+    <button id="backFromRooms" class="ghostbtn">← Назад</button>
+  </div>
+
+  <!-- STEP 3: nick + country -->
+  <div class="login-card" id="stepJoin" style="display:none">
+    <div class="eyebrow" id="roomLabel">КАМПАНИЯ</div>
+    <h1>Вступить в кампанию</h1>
+    <p>Выбери никнейм и державу, за которую будешь играть.</p>
+    <input id="nick" maxlength="20" placeholder="Никнейм">
+    <select id="country"></select>
+    <button id="join">ВСТУПИТЬ В КАМПАНИЮ</button>
+    <button id="backFromJoin" class="ghostbtn">← Назад</button>
+  </div>
+
+</div>
+
+<header class="topbar">
+  <div class="logo"><b>IRON<br>ERA</b><span>WORLD STRATEGY ONLINE</span></div>
+  <div class="calendar"><b id="date">—</b><span id="weather">ЯСНО</span></div>
+  <div class="resourcebar">
+    <div><small>💰</small><b id="money">0</b></div>
+    <div><small>⚙</small><b id="ic">0</b></div>
+    <div><small>⛓</small><b id="metal">0</b></div>
+    <div><small>🛢</small><b id="oil">0</b></div>
+    <div><small>👥</small><b id="mp">0</b></div>
+  </div>
+  <div class="online"><i></i><b id="online">0</b><span>ОНЛАЙН</span></div>
+  <div class="roomtag" id="roomTag">—</div>
+  <button class="net leaveBtn" id="leaveRoom">ВЫЙТИ В ЛОББИ</button>
+  <div class="net" id="net">OFFLINE</div>
+</header>
+
+<div class="layout">
+  <aside class="left">
+    <div class="panel tabs">
+      <button class="tab active" data-tab="overview">ОБЗОР</button>
+      <button class="tab" data-tab="army">АРМИЯ</button>
+      <button class="tab" data-tab="industry">ЭКОНОМИКА</button>
+      <button class="tab" data-tab="tech">ТЕХНОЛОГИИ</button>
+      <button class="tab" data-tab="diplo">ДИПЛОМАТИЯ</button>
+      <button class="tab" data-tab="politics">ПОЛИТИКА</button>
+      <button class="tab" data-tab="intel">РАЗВЕДКА</button>
+      <button class="tab" data-tab="stats">СТАТИСТИКА</button>
+    </div>
+
+    <section class="panel hero">
+      <div class="country-crest" id="crest"></div>
+      <div>
+        <small>ДЕРЖАВА</small>
+        <h2 id="countryName">—</h2>
+        <span id="countryOwner">—</span>
+      </div>
+    </section>
+
+    <section id="panel-overview" class="tabpanel active">
+      <div class="grid2">
+        <div class="stat"><small>ПРОМЫШЛЕННОСТЬ</small><b id="ovIc">0</b></div>
+        <div class="stat"><small>СТАБИЛЬНОСТЬ</small><b id="ovStab">0%</b></div>
+        <div class="stat"><small>ЛЮДСКИЕ РЕСУРСЫ</small><b id="ovMp">0</b></div>
+        <div class="stat"><small>ВОЕННАЯ ПОДДЕРЖКА</small><b id="ovWs">0%</b></div>
+        <div class="stat"><small>TC / ЛОГИСТИКА</small><b id="ovTc">0</b></div>
+        <div class="stat"><small>ПОЛИТ. ОЧКИ</small><b id="ovPp">0</b></div>
+      </div>
+      <div class="subpanel"><div class="section-title">АКТИВНОСТЬ</div><div id="alerts"></div></div>
+    </section>
+
+    <section id="panel-army" class="tabpanel">
+      <div class="row-actions">
+        <button data-template="infantry" class="produce">＋ ПЕХОТА</button>
+        <button data-template="motorized" class="produce">＋ МОТО</button>
+        <button data-template="armor" class="produce">＋ ТАНКИ</button>
+        <button data-template="mountain" class="produce">＋ ГОРНЫЕ</button>
+      </div>
+      <div id="armyList" class="list"></div>
+    </section>
+
+    <section id="panel-industry" class="tabpanel">
+      <div class="grid2">
+        <button class="bigbutton" id="buildFactory">🏭 Построить фабрику<br><small>−6 металла</small></button>
+        <button class="bigbutton" id="tradeQuick">🚢 Быстрая торговая сделка<br><small>−5 денег → +ресурсы</small></button>
+      </div>
+      <div class="section-title">ОЧЕРЕДЬ ПРОИЗВОДСТВА</div>
+      <div id="productionList" class="list"></div>
+    </section>
+
+    <section id="panel-tech" class="tabpanel">
+      <div id="researchList" class="list"></div>
+    </section>
+
+    <section id="panel-diplo" class="tabpanel">
+      <div class="diplo-controls"><select id="targetCountry"></select></div>
+      <div class="grid2">
+        <button id="improveRelation" class="bigbutton">🤝 Улучшить отношения<br><small>−5 денег</small></button>
+        <button id="makeAlliance" class="bigbutton">🛡 Создать альянс<br><small>−10 денег</small></button>
+        <button id="declareWar" class="danger bigbutton">⚔ Объявить войну</button>
+        <button id="trade" class="bigbutton">📦 Торговая сделка<br><small>−5 денег</small></button>
+      </div>
+      <div class="section-title">ДИПЛОМАТИЧЕСКИЕ ОТНОШЕНИЯ</div>
+      <div id="relations" class="relations"></div>
+    </section>
+
+    <section id="panel-politics" class="tabpanel">
+      <div class="sliderrow"><span>Левые силы</span><input id="politicalLeft" type="range" min="0" max="100"><b id="politicalLeftV">0</b></div>
+      <div class="sliderrow"><span>Свободный рынок</span><input id="economyLaw" type="range" min="0" max="100"><b id="economyLawV">0</b></div>
+      <div class="sliderrow"><span>Мобилизация</span><input id="conscription" type="range" min="0" max="100"><b id="conscriptionV">0</b></div>
+      <div class="section-title">МИНИСТРЫ</div>
+      <div id="ministers" class="chips"></div>
+      <div class="section-title">НАЦИОНАЛЬНЫЕ РЕШЕНИЯ</div>
+      <div id="decisionsList" class="list"></div>
+    </section>
+
+    <section id="panel-intel" class="tabpanel">
+      <div class="grid2">
+        <div class="stat"><small>ВНУТРЕННЯЯ РАЗВЕДКА</small><b id="spyDomestic">0</b></div>
+        <div class="stat"><small>ИНОСТРАННАЯ РАЗВЕДКА</small><b id="spyForeign">0</b></div>
+      </div>
+      <div class="diplo-controls"><select id="spyTarget"></select></div>
+      <button id="spyButton" class="bigbutton">🕵 Отправить шпионскую сеть<br><small>−8 денег</small></button>
+      <div id="spyList" class="list"></div>
+    </section>
+
+    <section id="panel-stats" class="tabpanel">
+      <div id="worldStats" class="table"></div>
+    </section>
+  </aside>
+
+  <section class="world">
+    <div class="world-head">
+      <div><small>МИРОВАЯ КАРТА</small><h1>Политическая карта</h1></div>
+      <div class="map-modes">
+        <button class="mode active" data-mode="political">ПОЛИТИКА</button>
+        <button class="mode" data-mode="industry">ПРОМ.</button>
+        <button class="mode" data-mode="supply">СНАБЖ.</button>
+        <button class="mode" data-mode="terrain">МЕСТНОСТЬ</button>
+        <button class="mode" data-mode="weather">ПОГОДА</button>
+      </div>
+    </div>
+    <canvas id="map" width="900" height="690"></canvas>
+    <div class="map-legend" id="mapLegend"></div>
+    <div class="map-controls"><button id="pause">Ⅱ</button><button id="speed1">1×</button><button id="speed2">2×</button><button id="speed4">4×</button></div>
+    <div class="map-help">ЛКМ — провинция • Shift+ЛКМ — приказ движения • ПКМ — атака</div>
+  </section>
+
+  <aside class="right">
+    <section class="panel">
+      <div class="section-title">ИГРОКИ <span id="playersCount">0</span></div>
+      <div id="playersList" class="players"></div>
+    </section>
+    <section class="panel chat-panel">
+      <div class="section-title">МИРОВОЙ ЧАТ</div>
+      <div id="chat" class="chat"></div>
+      <div class="chatrow"><input id="chatInput" maxlength="180" placeholder="Сообщение..."><button id="sendChatBtn">➤</button></div>
+    </section>
+    <section class="panel">
+      <div class="section-title">ХРОНИКА</div>
+      <div id="log" class="log"></div>
+    </section>
+    <section class="panel">
+      <div class="section-title">ВОЙНЫ</div>
+      <div id="wars" class="wars"></div>
+    </section>
+    <section class="panel">
+      <div class="section-title">ГЛОБАЛЬНЫЕ СОБЫТИЯ</div>
+      <div id="events" class="log"></div>
+    </section>
+  </aside>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
