@@ -151,16 +151,16 @@ function userFromReq(req){
 function publicUser(u){return u?{id:u.userId,username:u.username}:null;}
 function authKey(username){return String(username||'').trim().toLowerCase();}
 async function initDb(){
-  if(!pool)return;
+  if(!dbOnline)return;
   await pool.query(`CREATE TABLE IF NOT EXISTS ie_users(id uuid PRIMARY KEY, username varchar(40) UNIQUE NOT NULL, password_hash text NOT NULL, created_at timestamptz DEFAULT now());`);
   await pool.query(`CREATE TABLE IF NOT EXISTS ie_rooms(id varchar(24) PRIMARY KEY, name varchar(80) NOT NULL, payload jsonb NOT NULL, updated_at timestamptz DEFAULT now());`);
 }
 async function saveRoom(room){
-  if(!pool)return;
+  if(!dbOnline)return;
   await pool.query(`INSERT INTO ie_rooms(id,name,payload,updated_at) VALUES($1,$2,$3,now()) ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,payload=EXCLUDED.payload,updated_at=now()`,[room.id,room.name,JSON.stringify({host:room.host,maxPlayers:room.maxPlayers,status:room.status,world:room.world})]);
 }
 async function loadRooms(){
-  if(!pool)return;
+  if(!dbOnline)return;
   const r=await pool.query(`SELECT * FROM ie_rooms ORDER BY updated_at DESC LIMIT 30`);
   for(const row of r.rows){const p=row.payload;rooms.set(row.id,{id:row.id,name:row.name,host:p.host,maxPlayers:p.maxPlayers,status:p.status||'waiting',world:p.world||makeWorld(),clients:new Map(),lastSave:Date.now()});}
 }
@@ -294,6 +294,10 @@ function tickRoom(room){
 setInterval(()=>{for(const room of rooms.values())tickRoom(room)},2000);
 setInterval(()=>{for(const ws of wss.clients){if(ws.isAlive===false){try{ws.terminate();}catch{}continue;}ws.isAlive=false;try{ws.ping();}catch{}}},25000);
 
-await initDb();await loadRooms();
-server.listen(PORT,'0.0.0.0',()=>console.log(`Iron Era Online v0.9 listening on ${PORT}`));
-server_path.write_text(server, encoding='utf-8')
+try{
+  await initDb();
+  await loadRooms();
+}catch(err){
+  console.error("[IronEra] Startup database step failed:", err);
+}
+server.listen(PORT,'0.0.0.0',()=>console.log(`Iron Era Online v1.0 listening on ${PORT}`));

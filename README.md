@@ -1,6 +1,7 @@
-# Iron Era Online v0.9 — Full Website Fixed
+# Iron Era Online v1.0 — Render Safe Build
 
-## Structure
+Основной full-website проект:
+
 ```text
 IronEraOnline/
 ├── package.json
@@ -24,27 +25,44 @@ IronEraOnline/
     └── assets/
 ```
 
-## Fixed in v0.9
-- Full-site structure kept exactly as requested.
-- Game room sends a world snapshot before country selection, so the map is not blank.
-- Player is NOT inserted into the match until a country is explicitly chosen.
-- Nickname and country are both mandatory and checked on the server.
-- Occupied countries are blocked.
-- Reconnect/rejoin preserves the player session.
-- WebSocket heartbeat and automatic reconnect.
-- Auth button disappears on the landing page when already logged in.
-- Lobby, profile and game use separate JS/CSS modules.
-- Tabs use explicit data-tab keys instead of depending on translated button text.
-- Units are rendered from the actual country state.
-- National events have choices and server-side effects.
-- AI countries continue production/research/wars.
-- PostgreSQL is used when `DATABASE_URL` is provided.
+### Render
+Build:
+`npm install`
 
-## Render
-Build: `npm install`
-Start: `npm start`
-Runtime: Node
+Start:
+`npm start`
 
-Optional PostgreSQL: set `DATABASE_URL` in Render Environment.
+### Главное исправление этого билда
+Если `DATABASE_URL` отсутствует, неверен или PostgreSQL временно недоступен, сервер НЕ падает при старте. Он автоматически запускается в memory mode.
 
-VPN note: there is no IP/VPN/country block. HTTPS/WSS works through Render's reverse proxy; the server uses no IP-based login rules.
+`/health` показывает:
+- `db: "online"` — PostgreSQL доступен
+- `db: "memory"` — игра работает без PostgreSQL
+
+Это важно для Render: временная ошибка базы больше не должна превращаться в `Exited with status 1 while running your code`.
+
+После исправления `DATABASE_URL` сохранения можно включить без изменения игрового кода.
+
+
+## Render v1.0.1 fix
+Исправлена критическая ошибка старта:
+`ReferenceError: server_path is not defined`
+
+Причина была в случайно попавшей в `server.js` строке Python-кода.
+В v1.0.1 этой строки нет.
+
+После деплоя в Render ожидаемый запуск:
+```text
+npm start
+> iron-era-online@1.0.1 start
+> node server.js
+Iron Era Online v1.0 listening on <PORT>
+```
+
+## v1.0.2
+This build explicitly removes the accidental Python statement that caused:
+`ReferenceError: server_path is not defined`
+
+The deployed package should report:
+`iron-era-online@1.0.2`
+and `node server.js`.
