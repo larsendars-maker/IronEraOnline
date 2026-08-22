@@ -1,41 +1,23 @@
-# Iron Era Online v0.3 — Render + WebSocket
+# Iron Era Online v0.4 — HOI2-inspired web prototype
 
-## Что это
-Первый вариант с настоящим real-time сервером: Node.js + WebSocket (`ws`).
-Сервер является authoritative: игровые действия проходят через сервер и рассылаются всем подключённым игрокам.
+Новый прототип: политическая карта с провинциями, игроками, никнеймами, онлайн-счётчиком, real-time WebSocket, чатом и серверным ИИ.
 
-## Запуск локально
-Требуется Node.js 20+.
-```bash
-npm install
-npm start
-```
-Откройте http://localhost:10000
+## Структура
+- server.js — authoritative game server
+- public/index.html — интерфейс
+- public/style.css — визуальный стиль
+- public/app.js — клиент
+- package.json — зависимости
+- render.yaml — Render Blueprint
 
 ## Render
-1. Создайте репозиторий на GitHub.
-2. Загрузите в него все файлы проекта.
-3. На Render: New → Web Service → подключите репозиторий.
-4. Runtime: Node.
-5. Build Command: `npm install`
-6. Start Command: `npm start`
-7. План: Free.
-8. Deploy.
+Web Service:
+- Runtime: Node
+- Build: `npm install`
+- Start: `npm start`
+- Free для тестирования
 
-Порт уже берётся из `process.env.PORT`, поэтому Render сам его передаст.
+Render официально поддерживает входящие WebSocket-соединения для Web Services. Для публичного HTTPS клиента используется `wss://`.
 
-## Важно про бесплатный Render
-Free Web Services имеют 750 instance-hours в месяц и засыпают после 15 минут без входящего HTTP/WebSocket-трафика. При подключённых клиентах и сообщениях WebSocket сервис не должен засыпать из-за простоя; Render отдельно обновил это правило в феврале 2026. Бесплатный тариф предназначен для тестов/хобби, а не production.
-
-## В игре
-- общий серверный мир;
-- WebSocket real-time;
-- несколько подключённых игроков видят одинаковое состояние;
-- чат;
-- 5 государств;
-- 4 серверных ИИ;
-- ИИ строит заводы, создаёт дивизии и начинает войны;
-- производство ресурсов;
-- календарь;
-- войны;
-- серверная проверка игровых действий.
+## Важно
+Состояние мира сейчас хранится в памяти одного Node.js процесса. Это специально для первого онлайн-прототипа. Для постоянных партий и масштабирования следующим шагом нужна PostgreSQL/Redis синхронизация.
