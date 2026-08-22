@@ -1,0 +1,7 @@
+<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>IRON ERA ONLINE</title><link rel="stylesheet" href="style.css"></head>
+<body><header><div class="brand"><b>IRON ERA</b><span>ONLINE</span></div><div id="date"></div><div id="net">● ПОДКЛЮЧЕНИЕ...</div></header>
+<main><section class="mapWrap"><canvas id="map" width="860" height="610"></canvas><div class="hint">ЛКМ — выбрать страну • ПКМ — объявить войну • WebSocket real-time</div></section>
+<aside><section class="panel"><small>УПРАВЛЕНИЕ</small><h1 id="name"></h1><div class="stats"><div>🏭 Заводы<b id="factories"></b></div><div>👥 Людские<b id="manpower"></b></div><div>⛓ Сталь<b id="steel"></b></div><div>🪖 Дивизии<b id="divisions"></b></div><div>☮ Стабильность<b id="stability"></b></div></div></section>
+<section class="panel"><button id="factory">🏭 Построить завод <small>40 стали</small></button><button id="division">🪖 Создать дивизию <small>30 люд. + 15 стали</small></button></section>
+<section class="panel"><small>ЧАТ ОНЛАЙН</small><div id="chat"></div><div class="chatrow"><input id="chatInput" maxlength="180" placeholder="Сообщение..."><button id="send">➤</button></div></section>
+<section class="panel"><small>ЖУРНАЛ МИРА</small><div id="log"></div></section></aside></main><script src="app.js"></script></body></html>
