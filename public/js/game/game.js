@@ -69,8 +69,8 @@ division.onclick=()=>send({type:'action',action:'add_division',template:'infantr
 war.onclick=()=>send({type:'action',action:'declare_war',target:diploTarget.value});
 alliance.onclick=()=>send({type:'action',action:'alliance',target:diploTarget.value});
 relation.onclick=()=>send({type:'action',action:'relation',target:diploTarget.value});
-send.onclick=()=>{const t=chatInput.value.trim();if(t){send({type:'chat',text:t});chatInput.value='';}};
-chatInput.onkeydown=e=>{if(e.key==='Enter')send.click();};
+sendBtn.onclick=()=>{const t=chatInput.value.trim();if(t){send({type:'chat',text:t});chatInput.value='';}};
+chatInput.onkeydown=e=>{if(e.key==='Enter')sendBtn.click();};
 document.querySelectorAll('.game-tabs [data-tab]').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.game-tabs [data-tab]').forEach(x=>x.classList.remove('active'));document.querySelectorAll('.tabbody').forEach(x=>x.classList.remove('active'));btn.classList.add('active');document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');});
 document.querySelectorAll('.map-actions [data-mode]').forEach(btn=>btn.onclick=()=>{document.querySelectorAll('.map-actions [data-mode]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');mapMode=btn.dataset.mode;draw();});
 

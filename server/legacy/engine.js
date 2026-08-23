@@ -587,110 +587,6 @@ function handleAction(room,p,m,ws){
   if(m.action==='relation'){const t=w.countries[m.target];if(t&&t.id!==c.id&&c.money>=5){c.money-=5;c.relations[t.id]=(c.relations[t.id]||0)+10;log(w,`${c.name}: улучшены отношения с ${t.name}.`);}return;}
   if(m.action==='alliance'){const t=w.countries[m.target];if(!t||t.id===c.id||c.money<10)return;c.money-=10;let f=w.factions.find(x=>x.id===c.faction);if(!f){f={id:crypto.randomUUID(),name:`${c.tag} Alliance`,members:[]};w.factions.push(f);}if(!f.members.includes(c.id))f.members.push(c.id);if(!f.members.includes(t.id))f.members.push(t.id);c.faction=f.id;t.faction=f.id;log(w,`${c.name} и ${t.name} создали альянс.`);return;}
   if(m.action==='declare_war'){const t=w.countries[m.target];if(!t||t.id===c.id)return;if(w.wars.some(x=>(x.a===c.id&&x.b===t.id)||(x.a===t.id&&x.b===c.id)))return;w.wars.push({a:c.id,b:t.id,started:[w.year,w.month,w.day]});log(w,`${c.name} объявляет войну ${t.name}.`);return;}
-
-
-function applyFx(c,fx){
-  for(const [k,v] of Object.entries(fx)){
-    if(k==="money") c.money += v;
-    else if(k==="stability") c.stability = Math.max(0,Math.min(100,c.stability+v));
-    else if(k==="warSupport") c.warSupport = Math.max(0,Math.min(100,c.warSupport+v));
-    else if(k==="ic") { c.ic += v; c.baseIc += v; }
-    else if(k==="pp") c.politicalPoints += v;
-    else if(k==="metal") c.metal += v;
-    else if(k==="oil") c.oil += v;
-    else if(k==="construction") c.constructionBonus=(c.constructionBonus||0)+v;
-    else if(k==="production") c.productionBonus=(c.productionBonus||0)+v;
-    else if(k==="supply") c.supplyBonus=(c.supplyBonus||0)+v;
-    else if(k==="org") c.orgBonus=(c.orgBonus||0)+v;
-    else if(k==="air_fighters") c.air.fighters += v;
-    else if(k==="navy_destroyers") c.navy.destroyers += v;
-    else if(k==="navy_subs") c.navy.submarines += v;
-  }
-}
-
-
-function notifyPlayer(w, playerId, title, text){
-  const c = w.countries[w.players.find(p=>p.id===playerId)?.country];
-  if(!c)return;
-  c.notifications.unshift({id:crypto.randomUUID(),title,text,time:Date.now()});
-  c.notifications=c.notifications.slice(0,20);
-}
-function worldNotification(w,title,text,countryIds=[]){
-  for(const c of countryIds){
-    const ids=w.players.filter(p=>p.country===c).map(p=>p.id);
-    ids.forEach(pid=>notifyPlayer(w,pid,title,text));
-  }
-}
-function computeGoal(c,w,g){
-  if(g.id==="industrialization") return c.ic>=80;
-  if(g.id==="armament") return c.units.length>=12 || c.air.fighters>=30;
-  if(g.id==="great_power") return c.ic>=110 && c.units.length>=16;
-  if(g.id==="dominate_region") {
-    const own=Object.values(w.provinces).filter(p=>p.controller===c.id).length;
-    return own>=8;
-  }
-  return false;
-}
-function evaluateGoals(w,c){
-  for(const g of NATIONAL_GOALS){
-    if(!c.completedGoals.includes(g.id)&&computeGoal(c,w,g)){
-      c.completedGoals.push(g.id); c.victoryPoints=(c.victoryPoints||0)+g.score;
-      log(w,`${c.name}: выполнена национальная цель «${g.name}».`);
-    }
-  }
-}
-function evaluateVictory(w){
-  for(const c of Object.values(w.countries)){
-    if(c.victoryPoints>=VICTORY.military.need || c.ic>=VICTORY.industry.need || (c.faction && (w.factions.find(f=>f.id===c.faction)?.members?.length||0)>=VICTORY.diplomacy.need)){
-      if(!w.winner){
-        c.achievements.push('conqueror'); c.rating+=100; w.winner={country:c.id,reason:c.victoryPoints>=VICTORY.military.need?"Военная победа":c.ic>=VICTORY.industry.need?"Промышленная победа":"Дипломатическая победа"};
-        w.status="finished";
-        log(w,`${c.name} одержала победу: ${w.winner.reason}.`);
-      }
-    }
-  }
-}
-
-function startNationalEvent(w,c){
-  const available=EVENTS.filter(e=>!c.eventsSeen.includes(e.id));
-  if(!available.length || c.activeEvent) return;
-  const e=available[Math.floor(Math.random()*available.length)];
-  c.activeEvent={id:e.id,title:e.title,text:e.text,choices:e.choices};
-  log(w,`${c.name}: национальное событие — ${e.title}.`);
-}
-
-function resolveEvent(w,c,choiceId){
-  if(!c.activeEvent)return false;
-  const e=EVENTS.find(x=>x.id===c.activeEvent.id);
-  const choice=e?.choices.find(x=>x.id===choiceId);
-  if(!choice)return false;
-  applyFx(c,choice.fx);
-  c.eventsSeen.push(e.id);
-  log(w,`${c.name}: решение «${choice.name}» по событию «${e.title}».`);
-  c.activeEvent=null;
-  return true;
-}
-
-function createFrontOrder(c,unitIds,targetProvinceId,type="attack"){
-  return {id:crypto.randomUUID(),units:unitIds,target:targetProvinceId,type,planning:0,active:true};
-}
-
-function combatStats(c,u){
-  const t=UNIT_TYPES[u.type]||UNIT_TYPES.infantry;
-  const doctrine = c.commandPower>20 ? 1.05 : 1;
-  const org = Math.max(.15,u.org/80);
-  return {
-    attack:(t.soft*(1+(c._softBonus||0))) * org * doctrine,
-    hard:(t.hard*(1+(c._hardBonus||0))) * org,
-    defense:t.def * org,
-    breakthrough:t.breakthrough * org,
-    supply:t.supply
-  };
-}
-
-
-
-
   if(m.action==='mark_notifications'){
     c.notifications=[];
     return;
@@ -883,6 +779,105 @@ function combatStats(c,u){
   if(m.action==='attack'){const u=c.units.find(x=>x.id===m.unit),t=w.provinces[m.target];if(u&&t&&t.controller!==c.id&&t.neighbors.includes(u.province))u.order={type:'attack',target:t.id};return;}
   if(m.action==='event_choice'){applyEventChoice(w,c,m.choice);return;}
 }
+
+function applyFx(c,fx){
+  for(const [k,v] of Object.entries(fx)){
+    if(k==="money") c.money += v;
+    else if(k==="stability") c.stability = Math.max(0,Math.min(100,c.stability+v));
+    else if(k==="warSupport") c.warSupport = Math.max(0,Math.min(100,c.warSupport+v));
+    else if(k==="ic") { c.ic += v; c.baseIc += v; }
+    else if(k==="pp") c.politicalPoints += v;
+    else if(k==="metal") c.metal += v;
+    else if(k==="oil") c.oil += v;
+    else if(k==="construction") c.constructionBonus=(c.constructionBonus||0)+v;
+    else if(k==="production") c.productionBonus=(c.productionBonus||0)+v;
+    else if(k==="supply") c.supplyBonus=(c.supplyBonus||0)+v;
+    else if(k==="org") c.orgBonus=(c.orgBonus||0)+v;
+    else if(k==="air_fighters") c.air.fighters += v;
+    else if(k==="navy_destroyers") c.navy.destroyers += v;
+    else if(k==="navy_subs") c.navy.submarines += v;
+  }
+}
+
+function notifyPlayer(w, playerId, title, text){
+  const c = w.countries[w.players.find(p=>p.id===playerId)?.country];
+  if(!c)return;
+  c.notifications.unshift({id:crypto.randomUUID(),title,text,time:Date.now()});
+  c.notifications=c.notifications.slice(0,20);
+}
+function worldNotification(w,title,text,countryIds=[]){
+  for(const c of countryIds){
+    const ids=w.players.filter(p=>p.country===c).map(p=>p.id);
+    ids.forEach(pid=>notifyPlayer(w,pid,title,text));
+  }
+}
+function computeGoal(c,w,g){
+  if(g.id==="industrialization") return c.ic>=80;
+  if(g.id==="armament") return c.units.length>=12 || c.air.fighters>=30;
+  if(g.id==="great_power") return c.ic>=110 && c.units.length>=16;
+  if(g.id==="dominate_region") {
+    const own=Object.values(w.provinces).filter(p=>p.controller===c.id).length;
+    return own>=8;
+  }
+  return false;
+}
+function evaluateGoals(w,c){
+  for(const g of NATIONAL_GOALS){
+    if(!c.completedGoals.includes(g.id)&&computeGoal(c,w,g)){
+      c.completedGoals.push(g.id); c.victoryPoints=(c.victoryPoints||0)+g.score;
+      log(w,`${c.name}: выполнена национальная цель «${g.name}».`);
+    }
+  }
+}
+function evaluateVictory(w){
+  for(const c of Object.values(w.countries)){
+    if(c.victoryPoints>=VICTORY.military.need || c.ic>=VICTORY.industry.need || (c.faction && (w.factions.find(f=>f.id===c.faction)?.members?.length||0)>=VICTORY.diplomacy.need)){
+      if(!w.winner){
+        c.achievements.push('conqueror'); c.rating+=100; w.winner={country:c.id,reason:c.victoryPoints>=VICTORY.military.need?"Военная победа":c.ic>=VICTORY.industry.need?"Промышленная победа":"Дипломатическая победа"};
+        w.status="finished";
+        log(w,`${c.name} одержала победу: ${w.winner.reason}.`);
+      }
+    }
+  }
+}
+
+function startNationalEvent(w,c){
+  const available=EVENTS.filter(e=>!c.eventsSeen.includes(e.id));
+  if(!available.length || c.activeEvent) return;
+  const e=available[Math.floor(Math.random()*available.length)];
+  c.activeEvent={id:e.id,title:e.title,text:e.text,choices:e.choices};
+  log(w,`${c.name}: национальное событие — ${e.title}.`);
+}
+
+function resolveEvent(w,c,choiceId){
+  if(!c.activeEvent)return false;
+  const e=EVENTS.find(x=>x.id===c.activeEvent.id);
+  const choice=e?.choices.find(x=>x.id===choiceId);
+  if(!choice)return false;
+  applyFx(c,choice.fx);
+  c.eventsSeen.push(e.id);
+  log(w,`${c.name}: решение «${choice.name}» по событию «${e.title}».`);
+  c.activeEvent=null;
+  return true;
+}
+
+function createFrontOrder(c,unitIds,targetProvinceId,type="attack"){
+  return {id:crypto.randomUUID(),units:unitIds,target:targetProvinceId,type,planning:0,active:true};
+}
+
+function combatStats(c,u){
+  const t=UNIT_TYPES[u.type]||UNIT_TYPES.infantry;
+  const doctrine = c.commandPower>20 ? 1.05 : 1;
+  const org = Math.max(.15,u.org/80);
+  return {
+    attack:(t.soft*(1+(c._softBonus||0))) * org * doctrine,
+    hard:(t.hard*(1+(c._hardBonus||0))) * org,
+    defense:t.def * org,
+    breakthrough:t.breakthrough * org,
+    supply:t.supply
+  };
+}
+
 function applyEventChoice(world,c,choiceIndex){
   if(!c.activeEvent)return;const ev=EVENT_POOL.find(x=>x.id===c.activeEvent.id);const choice=ev?.choices?.[Number(choiceIndex)];if(!choice)return;
   for(const [k,v] of Object.entries(choice[1]))c[k]=(c[k]||0)+v;c.activeEvent=null;log(world,`${c.name}: решение события принято — ${choice[0]}.`);
