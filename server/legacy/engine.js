@@ -42,31 +42,31 @@ const COUNTRY_SEEDS = [
 ];
 
 const PROVINCE_DEFS = [
-  ['a1','Аурория — столица','aurora','city',120,135,['a2','a3']],
-  ['a2','Аурория — север','aurora','plains',90,85,['a1','b1']],
-  ['a3','Аурория — юг','aurora','forest',105,215,['a1','c1']],
-  ['b1','Бореалия — столица','borealis','city',255,110,['b2','a2','c1','h1']],
-  ['b2','Бореалия — восток','borealis','plains',345,95,['b1','d1']],
-  ['b3','Бореалия — юг','borealis','hills',300,190,['b1','c2','d1']],
-  ['c1','Центрия — столица','centria','city',220,235,['a3','b1','c2','f2']],
-  ['c2','Центрия — восток','centria','plains',305,270,['b3','c1','d2','g2']],
-  ['d1','Дория — столица','doria','city',425,165,['b2','b3','d2','e2']],
-  ['d2','Дория — юг','doria','forest',405,255,['c2','d1','i1']],
-  ['e1','Элирия — столица','elyria','city',510,225,['d1','d2','e2','i1']],
-  ['e2','Элирия — север','elyria','plains',520,145,['d1','e1','l1']],
-  ['f1','Иберия — столица','iberia','city',85,390,['f2','g1']],
-  ['f2','Иберия — север','iberia','hills',140,325,['f1','c1','g1']],
-  ['g1','Галлия — столица','gallia','city',235,395,['f1','f2','g2','h1']],
-  ['g2','Галлия — север','gallia','plains',250,340,['g1','c2','h1']],
-  ['h1','Скандинавия — столица','scandinavia','forest',165,285,['b1','g1','h2']],
-  ['h2','Скандинавия — север','scandinavia','mountains',170,185,['h1']],
-  ['i1','Анатолия — столица','anatolia','city',545,365,['d2','e1','i2','j1']],
-  ['i2','Анатолия — восток','anatolia','mountains',620,335,['i1','j1']],
-  ['j1','Персия — столица','persia','city',650,440,['i1','i2','k1']],
-  ['k1','Индостан — столица','india','city',760,465,['j1','k2','l1']],
-  ['k2','Индостан — восток','india','plains',820,430,['k1','l2']],
-  ['l1','Япония — столица','japania','city',850,285,['l2']],
-  ['l2','Япония — север','japania','mountains',820,225,['l1','k2']]
+  ['a1','Аурория — столица','usa','city',120,135,['a2','a3']],
+  ['a2','Аурория — север','usa','plains',90,85,['a1','b1']],
+  ['a3','Аурория — юг','usa','forest',105,215,['a1','c1']],
+  ['b1','Бореалия — столица','ussr','city',255,110,['b2','a2','c1','h1']],
+  ['b2','Бореалия — восток','ussr','plains',345,95,['b1','d1']],
+  ['b3','Бореалия — юг','ussr','hills',300,190,['b1','c2','d1']],
+  ['c1','Центрия — столица','germany','city',220,235,['a3','b1','c2','f2']],
+  ['c2','Центрия — восток','germany','plains',305,270,['b3','c1','d2','g2']],
+  ['d1','Дория — столица','france','city',425,165,['b2','b3','d2','e2']],
+  ['d2','Дория — юг','france','forest',405,255,['c2','d1','i1']],
+  ['e1','Элирия — столица','britain','city',510,225,['d1','d2','e2','i1']],
+  ['e2','Элирия — север','britain','plains',520,145,['d1','e1','l1']],
+  ['f1','Иберия — столица','italy','city',85,390,['f2','g1']],
+  ['f2','Иберия — север','italy','hills',140,325,['f1','c1','g1']],
+  ['g1','Галлия — столица','spain','city',235,395,['f1','f2','g2','h1']],
+  ['g2','Галлия — север','spain','plains',250,340,['g1','c2','h1']],
+  ['h1','Скандинавия — столица','poland','forest',165,285,['b1','g1','h2']],
+  ['h2','Скандинавия — север','poland','mountains',170,185,['h1']],
+  ['i1','Анатолия — столица','scandinavia','city',545,365,['d2','e1','i2','j1']],
+  ['i2','Анатолия — восток','scandinavia','mountains',620,335,['i1','j1']],
+  ['j1','Персия — столица','turkey','city',650,440,['i1','i2','k1']],
+  ['k1','Индостан — столица','iran','city',760,465,['j1','k2','l1']],
+  ['k2','Индостан — восток','iran','plains',820,430,['k1','l2']],
+  ['l1','Япония — столица','india','city',850,285,['l2']],
+  ['l2','Япония — север','india','mountains',820,225,['l1','k2']]
 ];
 
 const TECHS = [
@@ -343,10 +343,11 @@ function makeWorld(){
   }
   const world={year:1936,month:1,day:1,tick:0,paused:true,speed:1,weather:'clear',countries,provinces,wars:[],factions:[],players:[],events:[],log:['1936. Новая мировая кампания создана.']};
   for(const c of Object.values(countries)){
-    const home=Object.values(provinces).find(p=>p.owner===c.id);
+    const home=provinces[c.capital]||Object.values(provinces).find(p=>p.owner===c.id);
+    if(!home)continue;
     c.units=[
       {id:crypto.randomUUID(),name:'1-я дивизия',type:'infantry',province:home.id,strength:10,max:10,org:80,exp:5,order:null,commander:'Генерал I'},
-      {id:crypto.randomUUID(),name:'2-я дивизия',type:c.id==='aurora'?'armor':'infantry',province:home.id,strength:10,max:10,org:72,exp:5,order:null,commander:'Генерал II'}
+      {id:crypto.randomUUID(),name:'2-я дивизия',type:c.id==='usa'?'armor':'infantry',province:home.id,strength:10,max:10,org:72,exp:5,order:null,commander:'Генерал II'}
     ];
     c.production.push({id:crypto.randomUUID(),type:'infantry',remaining:24,total:24});
     baseCountryExtras(c);
@@ -452,28 +453,56 @@ async function loadRooms(){
     console.error('[IronEra] Room load failed; using memory mode:', e.message);
   }
 }
-async function auth(username,password){
+const users = new Map(); // memory-mode persistent user store: lowercase username -> {id,username,passwordHash}
+
+function validateCredentials(username,password){
   username=String(username||'').trim();
   if(!/^[a-zA-Z0-9_]{3,20}$/.test(username))throw new Error('Логин: 3–20 символов, латиница, цифры и _.');
   if(String(password||'').length<4)throw new Error('Пароль минимум 4 символа.');
+  return username;
+}
+function makeSession(userId,username){
+  const s={userId,username,token:crypto.randomBytes(24).toString('hex')};
+  sessions.set(s.token,s);
+  return s;
+}
+async function registerUser(username,password){
+  username=validateCredentials(username,password);
   if(!pool){
-    const key=authKey(username); const old=[...sessions.values()].find(s=>s.username.toLowerCase()===key);
-    if(old)return old;
-    const s={userId:crypto.randomUUID(),username,token:crypto.randomBytes(24).toString('hex')};sessions.set(s.token,s);return s;
+    const key=authKey(username);
+    if(users.has(key))throw new Error('Этот логин уже занят.');
+    const hash=await bcrypt.hash(password,10);
+    const id=crypto.randomUUID();
+    users.set(key,{id,username,passwordHash:hash});
+    return makeSession(id,username);
+  }
+  const q=await pool.query('SELECT id FROM ie_users WHERE username=$1',[username]);
+  if(q.rows.length>0)throw new Error('Этот логин уже занят.');
+  const id=crypto.randomUUID();const hash=await bcrypt.hash(password,10);
+  await pool.query('INSERT INTO ie_users(id,username,password_hash) VALUES($1,$2,$3)',[id,username,hash]);
+  return makeSession(id,username);
+}
+async function loginUser(username,password){
+  username=validateCredentials(username,password);
+  if(!pool){
+    const key=authKey(username);
+    const u=users.get(key);
+    if(!u||!(await bcrypt.compare(password,u.passwordHash)))throw new Error('Неверный логин или пароль.');
+    return makeSession(u.id,u.username);
   }
   const q=await pool.query('SELECT * FROM ie_users WHERE username=$1',[username]);
-  if(q.rows.length===0){const id=crypto.randomUUID();const hash=await bcrypt.hash(password,10);await pool.query('INSERT INTO ie_users(id,username,password_hash) VALUES($1,$2,$3)',[id,username,hash]);const s={userId:id,username,token:crypto.randomBytes(24).toString('hex')};sessions.set(s.token,s);return s;}
-  if(!(await bcrypt.compare(password,q.rows[0].password_hash)))throw new Error('Неверный логин или пароль.');
-  const s={userId:q.rows[0].id,username:q.rows[0].username,token:crypto.randomBytes(24).toString('hex')};sessions.set(s.token,s);return s;
+  if(q.rows.length===0||!(await bcrypt.compare(password,q.rows[0].password_hash)))throw new Error('Неверный логин или пароль.');
+  return makeSession(q.rows[0].id,q.rows[0].username);
 }
+
 
 app.get('/',(_,res)=>res.sendFile(new URL('../../public/index.html',import.meta.url).pathname));
 app.get('/lobby',(_,res)=>res.sendFile(new URL('../../public/pages/lobby.html',import.meta.url).pathname));
 app.get('/game',(_,res)=>res.sendFile(new URL('../../public/pages/game.html',import.meta.url).pathname));
 app.get('/profile',(_,res)=>res.sendFile(new URL('../../public/pages/profile.html',import.meta.url).pathname));
 app.get('/api/me',(req,res)=>res.json({user:publicUser(userFromReq(req))}));
-app.post('/api/auth/register',async(req,res)=>{try{const s=await auth(req.body.username,req.body.password);res.json({ok:true,token:s.token,user:publicUser(s)});}catch(e){res.status(400).json({ok:false,error:e.message});}});
-app.post('/api/auth/login',async(req,res)=>{try{const s=await auth(req.body.username,req.body.password);res.json({ok:true,token:s.token,user:publicUser(s)});}catch(e){res.status(400).json({ok:false,error:e.message});}});
+app.post('/api/auth/register',async(req,res)=>{try{const s=await registerUser(req.body.username,req.body.password);res.json({ok:true,token:s.token,user:publicUser(s)});}catch(e){res.status(400).json({ok:false,error:e.message});}});
+app.post('/api/auth/login',async(req,res)=>{try{const s=await loginUser(req.body.username,req.body.password);res.json({ok:true,token:s.token,user:publicUser(s)});}catch(e){res.status(400).json({ok:false,error:e.message});}});
 app.post('/api/auth/logout',(req,res)=>{const u=userFromReq(req);if(u)sessions.delete(u.token);res.json({ok:true});});
 app.get('/api/rooms',(req,res)=>{
   const u=userFromReq(req);
@@ -489,9 +518,14 @@ app.post('/api/rooms',async(req,res)=>{
   if(!u)return res.status(401).json({ok:false,error:'Нужна авторизация.'});
   const existing=roomOwnedBy(u.username);
   if(existing)return res.status(409).json({ok:false,error:`У тебя уже есть комната «${existing.name}». Сначала удали её.`,roomId:existing.id});
-  const room=createRoom(req.body.name||`${u.username} — кампания`,u.username,req.body.maxPlayers);
-  await saveRoom(room);
-  res.json({ok:true,roomId:room.id});
+  try{
+    const room=createRoom(req.body.name||`${u.username} — кампания`,u.username,req.body.maxPlayers);
+    await saveRoom(room);
+    res.json({ok:true,roomId:room.id});
+  }catch(e){
+    console.error('[IronEra] Room creation failed:',e);
+    res.status(500).json({ok:false,error:'Не удалось создать кампанию. Попробуй ещё раз.'});
+  }
 });
 app.delete('/api/rooms/:id',async(req,res)=>{
   const u=userFromReq(req);
