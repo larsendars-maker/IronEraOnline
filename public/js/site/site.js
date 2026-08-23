@@ -1,6 +1,14 @@
 const TOKEN_KEY='ironEraToken';
 function getToken(){return localStorage.getItem(TOKEN_KEY)||'';}
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function toast(message,type='info',title){
+  let stack=document.querySelector('.toast-stack');
+  if(!stack){stack=document.createElement('div');stack.className='toast-stack';document.body.appendChild(stack);}
+  const t=document.createElement('div');t.className=`toast ${type}`;
+  t.innerHTML=`${title?`<b>${esc(title)}</b>`:''}${esc(message)}`;
+  stack.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .3s ease, transform .3s ease';t.style.opacity='0';t.style.transform='translateX(24px)';setTimeout(()=>t.remove(),320);},4200);
+}
 async function api(path,options={}){
   const headers={'Content-Type':'application/json',...(options.headers||{})};
   const t=getToken(); if(t)headers.Authorization=`Bearer ${t}`;

@@ -313,7 +313,20 @@ const EVENT_POOL = [
 ];
 
 function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
-function poly(x,y){return [[x-30,y-28],[x+29,y-25],[x+35,y+26],[x-7,y+34],[x-35,y+5]];}
+function hashSeed(str){let h=2166136261;for(let i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619);}return h>>>0;}
+function seededRandom(seed){let s=seed>>>0;return function(){s^=s<<13;s^=s>>>17;s^=s<<5;s>>>=0;return (s>>>0)/4294967296;};}
+function poly(x,y,seed){
+  const rnd=seededRandom(hashSeed(String(seed??`${x},${y}`)));
+  const points=6+Math.floor(rnd()*4); // 6-9 vertices for an organic blob
+  const baseR=30+rnd()*14;
+  const pts=[];
+  for(let i=0;i<points;i++){
+    const angle=(i/points)*Math.PI*2 + (rnd()-0.5)*0.35;
+    const r=baseR*(0.72+rnd()*0.55);
+    pts.push([Math.round(x+Math.cos(angle)*r),Math.round(y+Math.sin(angle)*r)]);
+  }
+  return pts;
+}
 function log(world,msg){world.log.unshift(msg);world.log=world.log.slice(0,40);}
 function addEvent(world,countryId,eventId){
   const c=world.countries[countryId];
@@ -337,7 +350,7 @@ function makeWorld(){
   }
   const provinces={};
   for(const [id,name,owner,terrain,x,y,neighbors] of PROVINCE_DEFS){
-    provinces[id]={id,name,owner,controller:owner,terrain,x,y,poly:poly(x,y),neighbors,
+    provinces[id]={id,name,owner,controller:owner,terrain,x,y,poly:poly(x,y,id),neighbors,
       industry:terrain==='city'?7:5,infrastructure:terrain==='city'?8:5,victory:terrain==='city'?10:2,
       oil:Math.random()<0.18?4:0,metal:2+Math.floor(Math.random()*3),rare:1+Math.floor(Math.random()*2),port:0,resistance:0};
   }
@@ -554,7 +567,7 @@ wss.on('connection',ws=>{
       const room=rooms.get(String(m.roomId||'').toUpperCase());if(!room){ws.send(JSON.stringify({type:'error',message:'Комната не найдена.'}));return;}
       room.clients.set(ws,{id:ses.userId,nick:ses.username});ses.roomId=room.id;
       const existing=room.world.players.find(p=>p.id===ses.userId);
-      if(existing){ses.country=existing.country;ws.send(JSON.stringify({type:'joined',id:existing.id,country:existing.country,state:roomState(room)}));broadcast(room);return;}
+      if(existing){ses.country=existing.country;if(existing.country&&room.world.countries[existing.country])room.world.countries[existing.country].ai=false;ws.send(JSON.stringify({type:'joined',id:existing.id,country:existing.country,state:roomState(room)}));broadcast(room);return;}
       // Do not put player into the world until a country is explicitly chosen.
       ws.send(JSON.stringify({type:'room_state',room:roomState(room)}));
       ws.send(JSON.stringify({type:'choose_country_required'}));
@@ -566,7 +579,12 @@ wss.on('connection',ws=>{
       if(!room.world.countries[cid]){ws.send(JSON.stringify({type:'error',message:'Выбери страну.'}));return;}
       const existingPlayer=room.world.players.find(p=>p.id===ses.userId);
       const occupied=room.world.players.find(p=>p.country===cid&&p.id!==ses.userId);
-      if(occupied){ws.send(JSON.stringify({type:'error',message:'Эта страна уже занята.'}));return;}
+      const occupiedOnline=occupied&&[...room.clients.values()].some(v=>v.id===occupied.id);
+      if(occupiedOnline){ws.send(JSON.stringify({type:'error',message:'Эта страна уже занята.'}));return;}
+      if(occupied&&!occupiedOnline){
+        occupied.country=null;
+        log(room.world,`${occupied.nick} был неактивен, страна освобождена для другого игрока.`);
+      }
       if(existingPlayer){
         if(existingPlayer.ready||room.status==='running'){ws.send(JSON.stringify({type:'error',message:'Сменить страну можно только до готовности.'}));return;}
         const old=existingPlayer.country;
@@ -586,7 +604,9 @@ wss.on('connection',ws=>{
     if(m.type==='rejoin_room'){
       const room=rooms.get(String(m.roomId||'').toUpperCase());if(!room||!ses.userId)return;
       const p=room.world.players.find(p=>p.id===ses.userId);if(!p){ws.send(JSON.stringify({type:'error',message:'Игрок не найден в комнате.'}));return;}
-      room.clients.set(ws,{id:ses.userId,nick:ses.username});ses.roomId=room.id;ses.country=p.country;ws.send(JSON.stringify({type:'joined',id:p.id,country:p.country,state:roomState(room)}));broadcast(room);return;
+      room.clients.set(ws,{id:ses.userId,nick:ses.username});ses.roomId=room.id;ses.country=p.country;
+      if(p.country&&room.world.countries[p.country])room.world.countries[p.country].ai=false;
+      ws.send(JSON.stringify({type:'joined',id:p.id,country:p.country,state:roomState(room)}));broadcast(room);return;
     }
     const room=rooms.get(ses.roomId);if(!room)return;
     const player=room.world.players.find(p=>p.id===ses.userId);
@@ -610,7 +630,19 @@ wss.on('connection',ws=>{
       handleAction(room,player,m,ws);broadcast(room);saveRoom(room);return;
     }
   });
-  ws.on('close',()=>{const ses=sockets.get(ws);sockets.delete(ws);if(ses?.roomId){const room=rooms.get(ses.roomId);room?.clients.delete(ws);}});
+  ws.on('close',()=>{
+    const ses=sockets.get(ws);sockets.delete(ws);
+    if(ses?.roomId){
+      const room=rooms.get(ses.roomId);
+      if(room){
+        room.clients.delete(ws);
+        if(ses.country&&room.world.countries[ses.country]){
+          const stillOnline=[...room.clients.values()].some(v=>v.id===ses.userId);
+          if(!stillOnline){room.world.countries[ses.country].ai=true;broadcast(room);}
+        }
+      }
+    }
+  });
 });
 
 function handleAction(room,p,m,ws){
@@ -675,13 +707,17 @@ function handleAction(room,p,m,ws){
   }
   if(m.action==='build_supply_node'){
     const p=w.provinces[m.province];
-    if(!p||p.controller!==c.id||c.metal<10){ws.send(JSON.stringify({type:'error',message:'Нельзя построить узел снабжения.'}));return;}
+    if(!p){ws.send(JSON.stringify({type:'error',message:'Сначала выбери провинцию на карте.'}));return;}
+    if(p.controller!==c.id){ws.send(JSON.stringify({type:'error',message:'Можно строить только на своей территории.'}));return;}
+    if(c.metal<10){ws.send(JSON.stringify({type:'error',message:`Нужно 10 металла, есть ${Math.floor(c.metal)}.`}));return;}
     c.metal-=10;c.supplyNodes[p.id]=(c.supplyNodes[p.id]||0)+1;log(w,`${c.name}: создан узел снабжения в ${p.name}.`);return;
   }
   if(m.action==='build_railway'){
     const p=w.provinces[m.province];
-    if(!p||p.controller!==c.id||c.metal<5){ws.send(JSON.stringify({type:'error',message:'Нельзя построить железную дорогу.'}));return;}
-    c.metal-=5;c.railways[p.id]=(c.railways[p.id]||0)+1;return;
+    if(!p){ws.send(JSON.stringify({type:'error',message:'Сначала выбери провинцию на карте.'}));return;}
+    if(p.controller!==c.id){ws.send(JSON.stringify({type:'error',message:'Можно строить только на своей территории.'}));return;}
+    if(c.metal<5){ws.send(JSON.stringify({type:'error',message:`Нужно 5 металла, есть ${Math.floor(c.metal)}.`}));return;}
+    c.metal-=5;c.railways[p.id]=(c.railways[p.id]||0)+1;log(w,`${c.name}: построена железная дорога в ${p.name}.`);return;
   }
   if(m.action==='set_air_zone'){
     c.airZones[m.province]=m.mission||"air_superiority";return;
@@ -916,18 +952,60 @@ function applyEventChoice(world,c,choiceIndex){
   if(!c.activeEvent)return;const ev=EVENT_POOL.find(x=>x.id===c.activeEvent.id);const choice=ev?.choices?.[Number(choiceIndex)];if(!choice)return;
   for(const [k,v] of Object.entries(choice[1]))c[k]=(c[k]||0)+v;c.activeEvent=null;log(world,`${c.name}: решение события принято — ${choice[0]}.`);
 }
+function militaryStrength(c){
+  return (c.units||[]).reduce((s,u)=>s+u.strength,0) + (c.ic||0)*0.6 + (c.air?.fighters||0)*2 + (c.navy?.destroyers||0)*1.5;
+}
 function aiStep(room){
   const w=room.world;
   for(const c of Object.values(w.countries).filter(c=>c.ai)){
     if(!c.activeEvent&&!c.eventsSeen.includes('mobilization')&&Math.random()<0.02)addEvent(w,c.id,'mobilization');
-    if(!c.focus.active&&c.focus.completed.length<3&&c.politicalPoints>12&&Math.random()<0.07){
-      const f=FOCUSES.find(x=>!c.focus.completed.includes(x.id));
+
+    // Focuses: prioritise economy/infrastructure growth before military ones
+    if(!c.focus.active&&c.focus.completed.length<3&&c.politicalPoints>12&&Math.random()<0.09){
+      const available=FOCUSES.filter(x=>!c.focus.completed.includes(x.id));
+      const growth=available.find(x=>x.fx&&(x.fx.ic||x.fx.tc));
+      const f=growth||available[0];
       if(f){c.politicalPoints-=f.cost;c.focus.active={id:f.id,name:f.name,days:f.days};c.focus.progress=0;log(w,`${c.name}: ИИ начал фокус — ${f.name}.`);}
     }
-    if(c.production.length<3&&c.manpower>20&&Math.random()<0.25)c.production.push({id:crypto.randomUUID(),type:Math.random()<0.2?'armor':'infantry',remaining:24,total:24});
-    if(Math.random()<0.05){const slot=c.researchSlots.findIndex(x=>!x);const t=TECHS.find(t=>!c.researched.includes(t.id)&&!c.researchSlots.includes(t.id));if(slot>=0&&t)c.researchSlots[slot]=t.id;}
-    if(c.warSupport>60&&Math.random()<0.015){const targets=Object.values(w.countries).filter(t=>t.id!==c.id&&!w.wars.some(x=>(x.a===c.id&&x.b===t.id)||(x.a===t.id&&x.b===c.id)));const t=targets[Math.floor(Math.random()*targets.length)];if(t){w.wars.push({a:c.id,b:t.id,started:[w.year,w.month,w.day]});log(w,`${c.name} (ИИ) начал войну с ${t.name}.`);}}
-    if(c.activeEvent&&Math.random()<0.04)applyEventChoice(w,c,0);
+
+    // Production: keep a healthy queue, favour armor once industry can support it
+    if(c.production.length<4&&c.manpower>20&&c.metal>10&&Math.random()<0.28){
+      const wantArmor=c.ic>70&&Math.random()<0.35;
+      c.production.push({id:crypto.randomUUID(),type:wantArmor?'armor':'infantry',remaining:24,total:24});
+    }
+
+    // Research: fill idle slots
+    if(Math.random()<0.06){
+      const slot=c.researchSlots.findIndex(x=>!x);
+      const t=TECHS.find(t=>!c.researched.includes(t.id)&&!c.researchSlots.includes(t.id));
+      if(slot>=0&&t)c.researchSlots[slot]=t.id;
+    }
+
+    // War: only pick fights against neighbours the AI can realistically beat, and never overextend
+    const activeWars=w.wars.filter(x=>x.a===c.id||x.b===c.id).length;
+    if(c.warSupport>55&&activeWars<2&&Math.random()<0.02){
+      const myStrength=militaryStrength(c);
+      const myProvinces=Object.values(w.provinces).filter(p=>p.controller===c.id);
+      const borderIds=new Set(myProvinces.flatMap(p=>p.neighbors||[]));
+      const candidates=Object.values(w.countries).filter(t=>t.id!==c.id&&!w.wars.some(x=>(x.a===c.id&&x.b===t.id)||(x.a===t.id&&x.b===c.id)));
+      const neighbours=candidates.filter(t=>Object.values(w.provinces).some(p=>p.controller===t.id&&borderIds.has(p.id)));
+      const winnable=(neighbours.length?neighbours:candidates).filter(t=>militaryStrength(t)<myStrength*0.85);
+      const t=winnable[Math.floor(Math.random()*winnable.length)];
+      if(t){w.wars.push({a:c.id,b:t.id,started:[w.year,w.month,w.day]});log(w,`${c.name} (ИИ) начал войну с ${t.name}, оценив своё военное превосходство.`);}
+    }
+
+    // Give idle units at war standing orders against adjacent enemy territory
+    if(activeWars>0){
+      const enemyIds=w.wars.filter(x=>x.a===c.id||x.b===c.id).map(x=>x.a===c.id?x.b:x.a);
+      for(const u of (c.units||[])){
+        if(u.order)continue;
+        const p=w.provinces[u.province];if(!p)continue;
+        const target=(p.neighbors||[]).map(nid=>w.provinces[nid]).find(np=>np&&enemyIds.includes(np.controller));
+        if(target&&u.org>30&&Math.random()<0.35)u.order={type:'attack',target:target.id};
+      }
+    }
+
+    if(c.activeEvent&&Math.random()<0.05)applyEventChoice(w,c,0);
   }
 }
 function tickRoom(room){

@@ -4,3 +4,11 @@
 .room-actions{display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap}.room.owned-room{border-color:#76603d}.danger{border-color:#6b3b38!important;color:#d38a83!important;background:#191311!important}.room-limit-note{margin-top:7px;color:#b99559;font-size:11px}.btn:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.3)}
 
 .btn,.room,.panel{transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.btn:hover,.room:hover{transform:translateY(-1px)}
+
+@keyframes toastIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
+.toast-stack{position:fixed;top:16px;right:16px;z-index:200;display:flex;flex-direction:column;gap:8px;max-width:340px}
+.toast{background:#161915ee;border:1px solid #4d523f;border-left:3px solid #a88749;border-radius:6px;padding:10px 14px;color:#eee8dc;font-size:11px;line-height:1.45;box-shadow:0 12px 30px #000a;animation:toastIn .22s ease;backdrop-filter:blur(4px)}
+.toast.error{border-left-color:#c1554d}
+.toast.success{border-left-color:#78c986}
+.toast b{display:block;font:700 10px Georgia,serif;letter-spacing:.5px;margin-bottom:2px;color:#d7bb72}
+.toast.error b{color:#e1897f}

@@ -1,10 +1,18 @@
 const params=new URLSearchParams(location.search);
 const roomId=(params.get('room')||'').toUpperCase();
 const token=localStorage.getItem('ironEraToken');
-let ws=null,state=null,myId=null,myCountry=null,myNick='',selectedProv=null,selectedUnit=null,mapMode='political',reconnectTimer=null,selectedBuild=null;
+let ws=null,state=null,myId=null,myCountry=null,myNick='',selectedProv=null,selectedUnit=null,mapMode='political',reconnectTimer=null,selectedBuild=null,hoveredProv=null;
 const canvas=document.getElementById('map');const ctx=canvas.getContext('2d');
 if(!token||!roomId)location.href='/lobby';
 function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function toast(message,type='info',title){
+  let stack=document.querySelector('.toast-stack');
+  if(!stack){stack=document.createElement('div');stack.className='toast-stack';document.body.appendChild(stack);}
+  const t=document.createElement('div');t.className=`toast ${type}`;
+  t.innerHTML=`${title?`<b>${esc(title)}</b>`:''}${esc(message)}`;
+  stack.appendChild(t);
+  setTimeout(()=>{t.style.transition='opacity .3s ease, transform .3s ease';t.style.opacity='0';t.style.transform='translateX(24px)';setTimeout(()=>t.remove(),320);},4200);
+}
 function send(o){if(ws?.readyState===1)ws.send(JSON.stringify(o));}
 function connect(){
   if(window.__leavingIronEra)return;
@@ -20,8 +28,8 @@ function connect(){
     if(m.type==='choose_country_required')openCountryModal();
     if(m.type==='joined'){myId=m.id;myCountry=m.country;state=m.state||state;document.getElementById('connectOverlay').style.display='none';if(state)render();}
     if(m.type==='chat'){chat.innerHTML+=`<div class="msg"><b>${esc(m.from)}:</b> ${esc(m.text)}</div>`;chat.scrollTop=chat.scrollHeight;}
-    if(m.type==='room_deleted'){alert(m.message||'Комната удалена.');window.__leavingIronEra=true;location.href='/lobby';}
-    if(m.type==='error'){alert(m.message);if(/сессия|авториз/i.test(m.message))location.href='/';}
+    if(m.type==='room_deleted'){toast(m.message||'Комната удалена.','error');window.__leavingIronEra=true;setTimeout(()=>location.href='/lobby',900);}
+    if(m.type==='error'){toast(m.message,'error');if(/сессия|авториз/i.test(m.message))setTimeout(()=>location.href='/',900);}
   };
 }
 function renderShell(){connectOverlay.style.display='none';roomTitle.textContent=`${state.name||'CAMPAIGN'} • ${state.scenario||'1936'}`;online.textContent=state.players.length;date.textContent=`${state.year}.${String(state.month).padStart(2,'0')}.${String(state.day).padStart(2,'0')}`;}
@@ -260,7 +268,7 @@ function render(){
   document.querySelectorAll('.unit-row').forEach(row=>row.onclick=()=>{selectedUnit=row.dataset.unit;draw();});
   production.innerHTML=c.production.map(p=>`<div class="listrow"><b>${esc(p.type)}</b><small>${Math.round((1-p.remaining/p.total)*100)}%</small><div class="progress"><i style="width:${Math.max(0,Math.min(100,(1-p.remaining/p.total)*100))}%"></i></div></div>`).join('')||'<div class="empty">Очередь пуста.</div>';
   tech.innerHTML=state.techs.map(t=>`<div class="listrow"><b>${esc(t.name)}</b><small>${esc(t.group)} • ${c.researched.includes(t.id)?'✓ изучено':c.researchSlots.includes(t.id)?'в работе':t.cost+' очков'}</small>${!c.researched.includes(t.id)&&!c.researchSlots.includes(t.id)?`<button class="research-btn" data-tech="${t.id}">Исследовать</button>`:''}</div>`).join('');
-  document.querySelectorAll('.research-btn').forEach(b=>b.onclick=()=>{const slot=c.researchSlots.findIndex(x=>!x);if(slot<0)return alert('Нет свободного слота.');send({type:'action',action:'research',tech:b.dataset.tech,slot});});
+  document.querySelectorAll('.research-btn').forEach(b=>b.onclick=()=>{const slot=c.researchSlots.findIndex(x=>!x);if(slot<0)return toast('Нет свободного слота для исследования.','error');send({type:'action',action:'research',tech:b.dataset.tech,slot});});
   renderAdvancedSystems(c); renderDeepSystems(c); renderAllSystems(c);
   diplo.innerHTML=countries.map(x=>`<div class="listrow"><b>${esc(x.name)}</b><small>Отношения: ${c.relations?.[x.id]||0}</small></div>`).join('');
   players.innerHTML=state.players.map(p=>`<div class="player"><div class="avatar">${esc(p.nick.slice(0,2).toUpperCase())}</div><b>${esc(p.nick)}</b><small>${esc(state.countries[p.country].name)} ${p.ready?'✓':''}</small></div>`).join('');
@@ -271,38 +279,87 @@ function render(){
   if(!me) rebuildCountryChooser();
   draw();
 }
+const MAP_LEGENDS={
+  political:null,
+  industry:[['#c9964e','Высокая пром.'],['#9b9156','Средняя'],['#5f7b64','Низкая']],
+  supply:[['#6f9e78','Снабжено'],['#b1934f','Частично'],['#a3564f','Отрезано']],
+  resources:[['#7ea6c9','Нефть'],['#b8925a','Металл'],['#5f7360','Нет ресурсов']],
+  terrain:[['#71805e','Равнины'],['#4d684c','Лес'],['#847359','Холмы'],['#5d645e','Горы'],['#8d806d','Город']]
+};
+function terrainFill(p){return ({plains:'#71805e',forest:'#4d684c',hills:'#847359',mountains:'#5d645e',city:'#8d806d'})[p.terrain]||'#6d7868';}
 function draw(){
-  if(!state)return;ctx.clearRect(0,0,1000,720);
-  for(let x=0;x<1000;x+=60){ctx.strokeStyle='#ffffff06';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,720);ctx.stroke();}
-  for(let y=0;y<720;y+=60){ctx.strokeStyle='#ffffff09';ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(1000,y);ctx.stroke();}
+  if(!state)return;
+  ctx.clearRect(0,0,1000,720);
+  const ocean=ctx.createRadialGradient(500,340,80,500,360,760);
+  ocean.addColorStop(0,'#131d22');ocean.addColorStop(1,'#0a1013');
+  ctx.fillStyle=ocean;ctx.fillRect(0,0,1000,720);
+  for(let x=0;x<1000;x+=60){ctx.strokeStyle='#ffffff05';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,720);ctx.stroke();}
+  for(let y=0;y<720;y+=60){ctx.strokeStyle='#ffffff07';ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(1000,y);ctx.stroke();}
+
   for(const p of Object.values(state.provinces)){
-    const owner=state.countries[p.controller];if(!owner)continue;let fill=owner.color;
+    const owner=state.countries[p.controller];if(!owner)continue;
+    let fill=owner.color;
     if(mapMode==='industry')fill=p.industry>=7?'#c9964e':p.industry>=6?'#9b9156':'#5f7b64';
-    if(mapMode==='terrain')fill=({plains:'#71805e',forest:'#4d684c',hills:'#847359',mountains:'#5d645e',city:'#8d806d'})[p.terrain]||'#6d7868';
-    polygon(p.poly);ctx.globalAlpha=.78;ctx.fillStyle=fill;ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=p.id===selectedProv?'#f2d88b':'#151914';ctx.lineWidth=p.id===selectedProv?3:1.2;ctx.stroke();
-    ctx.textAlign='center';ctx.fillStyle='#f2ede1';ctx.font='700 10px Georgia';ctx.fillText(p.name,p.x,p.y-3);ctx.fillStyle='#d8d2c4aa';ctx.font='8px system-ui';ctx.fillText(p.terrain,p.x,p.y+10);
-  }
-  for(const w of state.wars){const a=countryCenter(w.a),b=countryCenter(w.b);if(a&&b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.setLineDash([8,5]);ctx.strokeStyle='#d6655c';ctx.lineWidth=3;ctx.stroke();ctx.setLineDash([]);}}
-  
-  for(const [cid,c] of Object.entries(state.countries)){
-    const center=countryCenter(cid); if(!center)continue;
-    ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='700 13px Georgia';ctx.shadowColor='#000';ctx.shadowBlur=5;ctx.fillText(c.name,center[0],center[1]-28);
-    const pl=state.players.find(p=>p.country===cid);
-    ctx.font='9px system-ui';ctx.fillStyle=pl?'#efd37e':'#ffffffaa';ctx.fillText(pl?`● ${pl.nick}`:'● ИИ',center[0],center[1]-12);ctx.shadowBlur=0;
+    if(mapMode==='terrain')fill=terrainFill(p);
+    if(mapMode==='resources')fill=p.oil>0?'#7ea6c9':p.metal>3?'#b8925a':'#5f7360';
+    if(mapMode==='supply')fill=(p.controller===p.owner)?'#6f9e78':(p.resistance||0)>50?'#a3564f':'#b1934f';
+    const isHover=p.id===hoveredProv, isSel=p.id===selectedProv;
+    ctx.save();
+    polygon(p.poly);
+    ctx.shadowColor='#000a';ctx.shadowBlur=isSel?14:6;ctx.shadowOffsetY=3;
+    ctx.globalAlpha=isHover?.93:.8;ctx.fillStyle=fill;ctx.fill();
+    ctx.restore();
+    polygon(p.poly);
+    ctx.strokeStyle=isSel?'#f2d88b':isHover?'#e8dcb8':'#12140fcc';
+    ctx.lineWidth=isSel?3:isHover?2:1.1;
+    ctx.stroke();
+    if(p.terrain==='city'){ctx.fillStyle='#f2ede1cc';ctx.beginPath();ctx.arc(p.x,p.y,2.4,0,Math.PI*2);ctx.fill();}
+    ctx.textAlign='center';ctx.lineWidth=3;ctx.strokeStyle='#0b0c09b0';ctx.font='700 10px Georgia';
+    ctx.strokeText(p.name,p.x,p.y-3);ctx.fillStyle='#f4efe4';ctx.fillText(p.name,p.x,p.y-3);
+    ctx.fillStyle='#d8d2c4aa';ctx.font='8px system-ui';ctx.fillText(p.terrain,p.x,p.y+10);
   }
 
-  for(const [cid,c] of Object.entries(state.countries))for(const u of c.units){const p=state.provinces[u.province];if(!p)continue;ctx.fillStyle=c.color;ctx.beginPath();ctx.arc(p.x+25,p.y+20,10,0,Math.PI*2);ctx.fill();ctx.strokeStyle=selectedUnit===u.id?'#fff0a9':'#151515';ctx.lineWidth=selectedUnit===u.id?3:1;ctx.stroke();ctx.fillStyle='#fff';ctx.font='800 8px system-ui';ctx.textAlign='center';ctx.fillText(Math.max(1,Math.round(u.strength)),p.x+25,p.y+23);if(cid===myCountry){ctx.fillStyle='#fff8';ctx.fillRect(p.x+10,p.y+38,30,3);ctx.fillStyle='#d9bd72';ctx.fillRect(p.x+10,p.y+38,30*(u.org/100),3);}}
+  for(const w of state.wars){const a=countryCenter(w.a),b=countryCenter(w.b);if(a&&b){ctx.beginPath();ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);ctx.setLineDash([8,5]);ctx.strokeStyle='#d6655c';ctx.lineWidth=3;ctx.stroke();ctx.setLineDash([]);}}
+
+  for(const [cid,c] of Object.entries(state.countries)){
+    const center=countryCenter(cid); if(!center)continue;
+    ctx.textAlign='center';ctx.fillStyle='#fff';ctx.font='700 13px Georgia';ctx.shadowColor='#000';ctx.shadowBlur=6;ctx.fillText(c.name,center[0],center[1]-30);
+    const pl=state.players.find(p=>p.country===cid);
+    ctx.font='9px system-ui';ctx.fillStyle=pl?'#efd37e':'#ffffffaa';ctx.fillText(pl?`● ${pl.nick}`:'● ИИ',center[0],center[1]-14);ctx.shadowBlur=0;
+  }
+
+  for(const [cid,c] of Object.entries(state.countries))for(const u of c.units){
+    const p=state.provinces[u.province];if(!p)continue;
+    ctx.beginPath();ctx.arc(p.x+25,p.y+20,10,0,Math.PI*2);
+    ctx.shadowColor='#000a';ctx.shadowBlur=5;ctx.fillStyle=c.color;ctx.fill();ctx.shadowBlur=0;
+    ctx.strokeStyle=selectedUnit===u.id?'#fff0a9':'#151515';ctx.lineWidth=selectedUnit===u.id?3:1;ctx.stroke();
+    ctx.fillStyle='#fff';ctx.font='800 8px system-ui';ctx.textAlign='center';ctx.fillText(Math.max(1,Math.round(u.strength)),p.x+25,p.y+23);
+    if(cid===myCountry){ctx.fillStyle='#fff8';ctx.fillRect(p.x+10,p.y+38,30,3);ctx.fillStyle='#d9bd72';ctx.fillRect(p.x+10,p.y+38,30*(u.org/100),3);}
+  }
+
+  const legend=MAP_LEGENDS[mapMode];
+  if(legend){
+    let lx=16,ly=684;
+    ctx.font='700 10px system-ui';
+    for(const [color,label] of legend){
+      ctx.fillStyle=color;ctx.fillRect(lx,ly-9,10,10);
+      ctx.fillStyle='#e7e2d4';ctx.textAlign='left';ctx.fillText(label,lx+15,ly);
+      lx+=15+ctx.measureText(label).width+16;
+    }
+  }
 }
 function polygon(poly){ctx.beginPath();ctx.moveTo(poly[0][0],poly[0][1]);for(let i=1;i<poly.length;i++)ctx.lineTo(poly[i][0],poly[i][1]);ctx.closePath();}
 function point(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*canvas.width/r.width,y:(e.clientY-r.top)*canvas.height/r.height};}
 function inside(x,y,p){let ins=false;for(let i=0,j=p.length-1;i<p.length;j=i++){const xi=p[i][0],yi=p[i][1],xj=p[j][0],yj=p[j][1];const hit=((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi);if(hit)ins=!ins;}return ins;}
 function countryCenter(id){const ps=Object.values(state.provinces).filter(p=>p.controller===id);if(!ps.length)return null;return[ps.reduce((s,p)=>s+p.x,0)/ps.length,ps.reduce((s,p)=>s+p.y,0)/ps.length];}
 canvas.onclick=e=>{if(!state)return;const pt=point(e);const p=Object.values(state.provinces).find(p=>inside(pt.x,pt.y,p.poly));if(!p)return;selectedProv=p.id;const c=state.countries[myCountry];const u=c?.units.find(u=>u.province===p.id);if(u)selectedUnit=u.id;if(e.shiftKey&&selectedUnit)send({type:'action',action:'move',unit:selectedUnit,target:p.id});draw();};
+canvas.onmousemove=e=>{if(!state)return;const pt=point(e);const p=Object.values(state.provinces).find(p=>inside(pt.x,pt.y,p.poly));const id=p?p.id:null;if(id!==hoveredProv){hoveredProv=id;canvas.style.cursor=id?'pointer':'default';draw();}};
+canvas.onmouseleave=()=>{if(hoveredProv){hoveredProv=null;draw();}};
 canvas.oncontextmenu=e=>{e.preventDefault();if(!selectedProv||!selectedUnit)return;send({type:'action',action:'attack',unit:selectedUnit,target:selectedProv});};
 
 document.querySelectorAll('.build-choice').forEach(b=>b.onclick=()=>{
   const province=document.getElementById('buildProvince')?.value;
-  if(!province)return alert('Выбери провинцию.');
+  if(!province)return toast('Сначала выбери провинцию на карте.','error');
   send({type:'action',action:'build',building:b.dataset.building,province});
 });
 
